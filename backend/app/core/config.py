@@ -23,6 +23,18 @@ class Settings(BaseSettings):
     DATABASE_ECHO: bool = False
     DB_POOL_PRE_PING: bool = True
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        if isinstance(v, str):
+            # Cloud providers like Render and Heroku use postgres://
+            # SQLAlchemy 2.0 requires postgresql+psycopg2:// or postgresql://
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+psycopg2://", 1)
+            elif v.startswith("postgresql://") and not v.startswith("postgresql+"):
+                return v.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return v
+
     # Phase 5: Weather Integration Configuration (Open-Meteo & Modular Providers)
     WEATHER_PROVIDER: str = "open-meteo"
     OPEN_METEO_API_URL: str = "https://api.open-meteo.com/v1/forecast"
@@ -46,9 +58,9 @@ class Settings(BaseSettings):
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",") if i.strip()]
+            return [i.strip().rstrip("/") for i in v.split(",") if i.strip()]
         elif isinstance(v, list):
-            return v
+            return [i.rstrip("/") if isinstance(i, str) else i for i in v]
         return [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
